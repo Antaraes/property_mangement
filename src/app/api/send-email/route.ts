@@ -1,13 +1,14 @@
 // pages/api/send-email.ts
-import type { NextApiRequest, NextApiResponse } from "next";
+
+import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export async function POST(req: Request) {
   if (req.method !== "POST") {
-    return res.status(405).json({ message: "Method not allowed" });
+    return NextResponse.json({ message: "Method not allowed" }, { status: 405 });
   }
 
-  const { firstName, lastName, purpose, notes } = req.body;
+  const { firstName, lastName, purpose, notes } = await req.json();
 
   // Create transporter
   const transporter = nodemailer.createTransport({
@@ -33,9 +34,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `,
     });
 
-    res.status(200).json({ success: true });
-  } catch (error) {
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (error: any) {
     console.error("Error sending email:", error);
-    res.status(500).json({ success: false });
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
