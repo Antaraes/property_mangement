@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import FAQ from "@/components/FAQ";
 import { LandingPageCarousel } from "@/components/LandingPageCarousel";
-import ContactForm from "@/components/ContactForm";
+import { trpc } from "@/server/client";
+import PropertyFilterUI from "@/components/property/PropertyFilterUI";
 
 export default function Home() {
   const router = useRouter();
@@ -17,25 +17,38 @@ export default function Home() {
   const searchRef = useRef(null);
   const containerRef = useRef(null);
 
+  const [filters, setFilters] = useState({});
+  const [searchTriggered, setSearchTriggered] = useState(false);
+  const {
+    data: properties,
+    isLoading,
+    error,
+    status,
+  } = trpc.property.list.useQuery(filters, {
+    enabled: searchTriggered, // 🔥 Prevents fetching on mount
+  });
+
   gsap.registerPlugin(ScrollTrigger);
 
-  const handleSearch = () => {
-    gsap.to(".search-button", {
-      scale: 0.9,
-      duration: 0.2,
-      yoyo: true,
-      repeat: 1,
-    });
+  useEffect(() => {
+    if (searchTriggered && status === "success" && properties.length > 0 && !isLoading) {
+      gsap.to(".search-button", {
+        scale: 0.9,
+        duration: 0.2,
+        yoyo: true,
+        repeat: 1,
+      });
 
-    gsap.to([contentRef.current, searchRef.current], {
-      opacity: 0,
-      y: -50,
-      duration: 0.6,
-      ease: "power2.in",
-      stagger: 0.1,
-      onComplete: () => router.push("/properties"),
-    });
-  };
+      gsap.to([contentRef.current, searchRef.current], {
+        opacity: 0,
+        y: -50,
+        duration: 0.6,
+        ease: "power2.in",
+        stagger: 0.1,
+        onComplete: () => router.push("/properties"),
+      });
+    }
+  }, [searchTriggered, status]);
 
   const animateEntrance = () => {
     gsap.killTweensOf([contentRef.current, searchRef.current]);
@@ -122,50 +135,12 @@ export default function Home() {
         {/* Search Filters */}
         <div ref={searchRef} className="absolute bottom-28 w-full px-4">
           <div className="max-w-6xl mx-auto bg-white rounded-lg shadow-xl p-6">
-            <div className="flex flex-col md:flex-row gap-4 items-end">
-              <div className="w-full">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Looking For</label>
-                <select className="w-full p-3 border rounded-lg">
-                  <option>Residence</option>
-                  <option>Commercial</option>
-                  <option>Land</option>
-                </select>
-              </div>
-
-              <div className="w-full">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-                <select className="w-full p-3 border rounded-lg">
-                  <option>Any Type</option>
-                  <option>House</option>
-                  <option>Apartment</option>
-                </select>
-              </div>
-
-              <div className="w-full">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Price</label>
-                <select className="w-full p-3 border rounded-lg">
-                  <option>$1000 - $50,000</option>
-                  <option>$50,000 - $100,000</option>
-                  <option>$100,000+</option>
-                </select>
-              </div>
-
-              <div className="w-full">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                <select className="w-full p-3 border rounded-lg">
-                  <option>All Indonesia</option>
-                  <option>Yogyakarta</option>
-                  <option>Bali</option>
-                </select>
-              </div>
-
-              <Button
-                onClick={handleSearch}
-                className="search-button w-full md:w-auto px-8 py-6  text-white rounded-lg  transition-colors"
-              >
-                Search
-              </Button>
-            </div>
+            <PropertyFilterUI
+              onFilter={(newFilters) => {
+                setFilters(newFilters);
+                setSearchTriggered(true); // ✅ Trigger search only when the button is clicked
+              }}
+            />
           </div>
         </div>
 
@@ -175,10 +150,6 @@ export default function Home() {
         </div>
       </div>
       <LandingPageCarousel />
-      <div className="min-h-screen bg-gray-50 py-12">
-        <ContactForm />
-      </div>
-      <FAQ />
     </>
   );
 }

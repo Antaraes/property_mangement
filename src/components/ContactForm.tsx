@@ -46,7 +46,7 @@ export default function ContactForm() {
   };
 
   return (
-    <div className=" mx-auto bg-[#222222] text-white border-gray-200 grid grid-cols-2">
+    <div className=" mx-auto bg-[#222222] text-white border-gray-200 grid grid-cols-1 md:grid-cols-2">
       <div className="relative">
         <Image
           src={
