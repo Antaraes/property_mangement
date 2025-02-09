@@ -2,9 +2,11 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { HouseIcon, Menu } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { useSession } from "next-auth/react";
 
 // Reusable NavLink Component
 const NavLink = ({ href, children }: { href: string; children: React.ReactNode }) => {
@@ -25,13 +27,15 @@ const NavLink = ({ href, children }: { href: string; children: React.ReactNode }
 };
 
 const Navbar = () => {
+  const { data: session } = useSession();
   const navLinks = [
     { href: "/", label: "Home" },
     { href: "/properties", label: "Properties" },
     { href: "/projects", label: "Our Projects" },
-    { href: "/faqs", label: "FAQs" },
+    { href: "/#faqs", label: "FAQs" },
     { href: "/aboutUs", label: "About Us" },
   ];
+  console.log(session);
 
   return (
     <Card className="container  bg-card border-0 py-3 px-4 sticky z-50 top-0 inset-x-0 h-16 flex items-center rounded-none justify-between  gap-6 ">
@@ -49,10 +53,31 @@ const Navbar = () => {
       </div>
 
       <div className="flex items-center">
-        <Button variant="secondary" className="hidden lg:block px-2">
-          Login
-        </Button>
-        <Button className="hidden lg:block ml-2 mr-2">Get Started</Button>
+        {session?.user ? (
+          <Link
+            href={"/dashboard/overview"}
+            className={cn(
+              buttonVariants({
+                variant: "outline",
+              }),
+              "hidden lg:block px-2"
+            )}
+          >
+            Dashboard
+          </Link>
+        ) : (
+          <Link
+            href={"/sign-in"}
+            className={cn(
+              buttonVariants({
+                variant: "outline",
+              }),
+              "hidden lg:block px-2"
+            )}
+          >
+            Login
+          </Link>
+        )}
 
         {/* Mobile Menu */}
         <div className="flex lg:hidden items-center gap-2">
