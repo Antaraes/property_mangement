@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "c:/Users/User/Downloads/Fillcreative-main/Fillcreative-main/src/components/ui/label";
+
 import Link from "next/link";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
@@ -14,6 +14,7 @@ import * as z from "zod";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { Label } from "../ui/label";
 
 interface SigninFormProps {}
 
