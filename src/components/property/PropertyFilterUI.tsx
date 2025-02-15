@@ -8,7 +8,7 @@ export default function PropertyFilterUI({ onFilter }: { onFilter: (filters: any
       {(handleChange, handleSubmit, filters) => (
         <form
           onSubmit={handleSubmit}
-          className="space-y-4 flex flex-col md:flex-row gap-4 items-end"
+          className="space-y-4 hidden md:flex flex-col md:flex-row gap-4 items-end"
         >
           <InputField
             label="Price Min"

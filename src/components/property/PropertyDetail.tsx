@@ -8,6 +8,7 @@ import { useParams } from "next/navigation";
 import gsap from "gsap";
 import { cn } from "@/lib/utils";
 import PropertyCard from "../PropertyCard";
+import Image from "next/image";
 
 export default function PropertyDetail() {
   const { id } = useParams<{ id: string }>();
@@ -49,16 +50,22 @@ export default function PropertyDetail() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           {/* Property Images */}
           <div ref={imageRef}>
-            <img
-              src={property.images[0]}
-              alt={property.name}
-              className="w-full h-96 object-cover rounded-lg shadow-lg"
-            />
+            <div>
+              <Image
+                src={property.images[0]}
+                alt={property.name}
+                width={1400}
+                height={1400}
+                className="w-full h-96 object-cover rounded-lg shadow-lg"
+              />
+            </div>
             <div className="grid grid-cols-4 gap-2 mt-4">
               {property.images.slice(1, 5).map((img, index) => (
-                <img
+                <Image
                   key={index}
                   src={img}
+                  width={1400}
+                  height={1400}
                   alt="Property image"
                   className="w-full h-24 object-cover rounded-lg shadow-md"
                 />
@@ -101,7 +108,7 @@ export default function PropertyDetail() {
         </div>
       </div>
       <h1 className="text-xl font-bold">Related Properties</h1>
-      <div className="grid grid-cols-4 gap-3 mt-3">
+      <div className="grid grid-cols-2 md:grid-cols-4  gap-3 mt-3">
         {properties?.map((property, index) => (
           <PropertyCard property={property} key={index} />
         ))}

@@ -110,11 +110,11 @@ export default function Home() {
     <>
       <div ref={contentRef} className="relative z-10 max-w-[95%] mx-auto  pt-5 ">
         <div className=" mx-auto">
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
+          <h1 className="text-3xl md:text-6xl font-bold mb-6 leading-tight">
             Guiding your path to <br /> a new home in
             <span className="text-4xl md:text-7xl ms-3">UAE</span>
           </h1>
-          <p className="text-lg md:text-xl mt-8 mb-12">
+          <p className="text-base md:text-xl mt-8 mb-12">
             With expert guidance and a deep understanding of the real estate landscape, we make your
             journey to a new home seamless and stress-free.
           </p>
@@ -133,7 +133,7 @@ export default function Home() {
         </div>
 
         {/* Search Filters */}
-        <div ref={searchRef} className="absolute bottom-28 w-full px-4">
+        <div ref={searchRef} className="absolute hidden md:block bottom-28 w-full px-4">
           <div className="max-w-6xl mx-auto bg-white rounded-lg shadow-xl p-6">
             <PropertyFilterUI
               onFilter={(newFilters) => {
