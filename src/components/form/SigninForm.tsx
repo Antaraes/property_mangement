@@ -32,13 +32,20 @@ const SigninForm: FC<SigninFormProps> = ({}) => {
     },
   });
 
-  const popupCenter = (url: string | URL | undefined, title: string | undefined) => {
+  const popupCenter = (
+    url: string | URL | undefined,
+    title: string | undefined
+  ) => {
     const dualScreenLeft = window.screenLeft ?? window.screenX;
     const dualScreenTop = window.screenTop ?? window.screenY;
 
-    const width = window.innerWidth ?? document.documentElement.clientWidth ?? screen.width;
+    const width =
+      window.innerWidth ?? document.documentElement.clientWidth ?? screen.width;
 
-    const height = window.innerHeight ?? document.documentElement.clientHeight ?? screen.height;
+    const height =
+      window.innerHeight ??
+      document.documentElement.clientHeight ??
+      screen.height;
 
     const systemZoom = width / window.screen.availWidth;
 
@@ -48,7 +55,9 @@ const SigninForm: FC<SigninFormProps> = ({}) => {
     const newWindow = window.open(
       url,
       title,
-      `width=${500 / systemZoom},height=${550 / systemZoom},top=${top},left=${left}`
+      `width=${500 / systemZoom},height=${
+        550 / systemZoom
+      },top=${top},left=${left}`
     );
 
     newWindow?.focus();
@@ -62,10 +71,14 @@ const SigninForm: FC<SigninFormProps> = ({}) => {
       redirect: false,
     });
 
+    console.log("SigninData", signInData);
+
     if (signInData?.error) {
       toast.error(signInData.error);
     } else {
+      toast.success("Login successful!");
       router.push("/dashboard/properties");
+      router.refresh();
     }
   };
   return (
@@ -90,7 +103,9 @@ const SigninForm: FC<SigninFormProps> = ({}) => {
                   placeholder="m@example.com"
                   {...form.register("email")}
                 />
-                <p className="text-sm text-red-500">{form.formState.errors.email?.message}</p>
+                <p className="text-sm text-red-500">
+                  {form.formState.errors.email?.message}
+                </p>
               </div>
               <div className="grid gap-1">
                 <div className="flex items-center">
@@ -108,12 +123,16 @@ const SigninForm: FC<SigninFormProps> = ({}) => {
                   placeholder="Enter your password"
                   {...form.register("password")}
                 />
-                <p className="text-sm text-red-500">{form.formState.errors.password?.message}</p>
+                <p className="text-sm text-red-500">
+                  {form.formState.errors.password?.message}
+                </p>
               </div>
               <Button type="submit" className="w-full border">
                 Login
               </Button>
-              <p className="text-gray-400 text-center my-2">Or sign up with email</p>
+              <p className="text-gray-400 text-center my-2">
+                Or sign up with email
+              </p>
 
               <Button
                 type="button"
@@ -121,7 +140,13 @@ const SigninForm: FC<SigninFormProps> = ({}) => {
                 onClick={() => popupCenter("/google-signin", "Sample Sign In")}
                 className="w-full bg-white border mb-2 flex items-center justify-center"
               >
-                <Image src={"/google.png"} alt="google" width={18} height={18} className="mr-2" />
+                <Image
+                  src={"/google.png"}
+                  alt="google"
+                  width={18}
+                  height={18}
+                  className="mr-2"
+                />
                 Login with Google
               </Button>
             </div>

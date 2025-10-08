@@ -69,6 +69,7 @@ enum PaidType {
   MONTHLY
   WEEKLY
   DAILY
+  ONCE
 }
 
 enum PropertyType {
