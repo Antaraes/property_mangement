@@ -28,6 +28,10 @@ model User {
   accounts      Account[]
   sessions      Session[]
 
+  // Agent relationships
+  agentPermissions AgentPermission[] // Properties this agent can access
+  createdAgents    AgentPermission[] @relation("CreatedBy") // Agents created by this admin
+
   Authenticator Authenticator[]
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
@@ -37,6 +41,7 @@ enum Role {
   AGENT
   CUSTOMER
   ADMIN
+  SUPERADMIN
 }
 
 model Property {
@@ -55,6 +60,10 @@ model Property {
   ownerType    OwnerType
   owner        User        @relation(fields: [ownerId], references: [id])
   ownerId      String
+
+  // Agent permissions
+  agentPermissions AgentPermission[]
+
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 }
@@ -135,8 +144,35 @@ model Authenticator {
   credentialDeviceType String
   credentialBackedUp   Boolean
   transports           String?
- 
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
+
   @@id([userId, credentialID])
+}
+
+// Agent Permission System
+model AgentPermission {
+  id         String   @id @default(uuid())
+  agentId    String   // The agent user
+  propertyId String   // The property they can access
+
+  // Permission types
+  canView    Boolean  @default(true)
+  canEdit    Boolean  @default(false)
+  canDelete  Boolean  @default(false)
+
+  // Relationships
+  agent      User     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // Who created this permission
+  createdBy   User     @relation("CreatedBy", fields: [createdById], references: [id])
+  createdById String
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([agentId, propertyId]) // One permission record per agent-property pair
+  @@index([agentId])
+  @@index([propertyId])
 }

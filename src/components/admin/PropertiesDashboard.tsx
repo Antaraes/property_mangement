@@ -9,14 +9,16 @@ import toast from "react-hot-toast";
 import PropertyCard from "./PropertyCard";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Shield } from "lucide-react";
 import BulkImportExport from "./BulkImportExport";
+import { useRBAC } from "@/hooks/useRBAC";
 
 interface PropertiesDashboardProps {}
 
 const PropertiesDashboard: FC<PropertiesDashboardProps> = ({}) => {
   const router = useRouter();
   const utils = trpc.useUtils();
+  const { isAgent, canViewAllProperties } = useRBAC();
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
     purpose: "",
@@ -80,9 +82,23 @@ const PropertiesDashboard: FC<PropertiesDashboardProps> = ({}) => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">My Properties</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold">
+              {canViewAllProperties ? "All Properties" : "My Properties"}
+            </h1>
+            {isAgent && (
+              <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                <Shield className="h-3 w-3" />
+                Agent View
+              </span>
+            )}
+          </div>
           <p className="text-gray-600 mt-1">
-            Manage and view all your property listings
+            {canViewAllProperties
+              ? "Manage and view all property listings"
+              : isAgent
+              ? "View and manage your assigned properties"
+              : "Manage and view your property listings"}
           </p>
         </div>
         <div className="flex gap-2">

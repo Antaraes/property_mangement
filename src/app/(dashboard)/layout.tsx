@@ -10,7 +10,11 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -78,7 +82,7 @@ const Layout: FC<LayoutProps> = ({ children }) => {
             </Link>
           </div>
         </header>
-        <div className="">{children}</div>
+        <div className="p-10">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

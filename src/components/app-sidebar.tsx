@@ -14,7 +14,6 @@ import {
 
 import { NavMain } from "@/components/nav-main";
 import { NavProjects } from "@/components/nav-projects";
-// import { NavUser } from "@/components/nav-user";
 
 import {
   Sidebar,
@@ -25,72 +24,83 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { NavUser } from "./nav-user";
+import { useRBAC } from "@/hooks/useRBAC";
 
-// Real estate-related sidebar data
-const data = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "#",
-      icon: LayoutDashboard,
-      items: [
-        {
-          title: "Overview",
-          url: "/dashboard/overview",
-        },
-      ],
-    },
-    {
-      title: "Properties",
-      url: "#",
-      icon: Home,
-      isActive: true,
-      items: [
-        {
-          title: "All Properties",
-          url: "/dashboard/properties",
-        },
-        {
-          title: "For Sale",
-          url: "/dashboard/properties/sale",
-        },
-        {
-          title: "For Rent",
-          url: "/dashboard/properties/rent",
-        },
-      ],
-    },
-    {
-      title: "Agents",
-      url: "#",
-      icon: Users,
-      items: [
-        {
-          title: "All Agents",
-          url: "/dashboard/agents",
-        },
-        {
-          title: "Top Rated",
-          url: "/dashboard/agents/top-rated",
-        },
-      ],
-    },
-    {
-      title: "Documents",
-      url: "#",
-      icon: FileText,
-      items: [
-        {
-          title: "Contracts",
-          url: "/dashboard/documents/contracts",
-        },
-        {
-          title: "Agreements",
-          url: "/dashboard/documents/agreements",
-        },
-      ],
-    },
-    {
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { canViewAgentTab, canViewDocuments, canManageSettings } = useRBAC();
+
+  // Build navigation based on user role
+  const navItems = React.useMemo(() => {
+    const items = [
+      {
+        title: "Dashboard",
+        url: "#",
+        icon: LayoutDashboard,
+        items: [
+          {
+            title: "Overview",
+            url: "/dashboard/overview",
+          },
+        ],
+      },
+      {
+        title: "Properties",
+        url: "#",
+        icon: Home,
+        isActive: true,
+        items: [
+          {
+            title: "All Properties",
+            url: "/dashboard/properties",
+          },
+          {
+            title: "For Sale",
+            url: "/dashboard/properties/sale",
+          },
+          {
+            title: "For Rent",
+            url: "/dashboard/properties/rent",
+          },
+        ],
+      },
+    ];
+
+    // Add Agents section for ADMIN and SUPERADMIN only
+    if (canViewAgentTab) {
+      items.push({
+        title: "Agents",
+        url: "#",
+        icon: Users,
+        items: [
+          {
+            title: "All Agents",
+            url: "/dashboard/agents",
+          },
+        ],
+      });
+    }
+
+    // Add Documents for AGENT, ADMIN, SUPERADMIN
+    if (canViewDocuments) {
+      items.push({
+        title: "Documents",
+        url: "#",
+        icon: FileText,
+        items: [
+          {
+            title: "Contracts",
+            url: "/dashboard/documents/contracts",
+          },
+          {
+            title: "Agreements",
+            url: "/dashboard/documents/agreements",
+          },
+        ],
+      });
+    }
+
+    // Add Locations for all users
+    items.push({
       title: "Locations",
       url: "#",
       icon: MapPin,
@@ -104,24 +114,34 @@ const data = {
           url: "/dashboard/locations/neighborhoods",
         },
       ],
-    },
-    {
+    });
+
+    // Add Settings with role-based sub-items
+    const settingsItems = [
+      {
+        title: "Profile",
+        url: "/dashboard/settings/profile",
+      },
+    ];
+
+    if (canManageSettings) {
+      settingsItems.push({
+        title: "Billing",
+        url: "/dashboard/settings/billing",
+      });
+    }
+
+    items.push({
       title: "Settings",
       url: "#",
       icon: Settings,
-      items: [
-        {
-          title: "Profile",
-          url: "/dashboard/settings/profile",
-        },
-        {
-          title: "Billing",
-          url: "/dashboard/settings/billing",
-        },
-      ],
-    },
-  ],
-  projects: [
+      items: settingsItems,
+    });
+
+    return items;
+  }, [canViewAgentTab, canViewDocuments, canManageSettings]);
+
+  const projects = [
     {
       name: "Investment Properties",
       url: "#",
@@ -132,10 +152,8 @@ const data = {
       url: "#",
       icon: Home,
     },
-  ],
-};
+  ];
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar className="sticky" collapsible="icon" {...props}>
       <SidebarHeader>
@@ -150,12 +168,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenuButton>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        <NavMain items={navItems} />
+        <NavProjects projects={projects} />
       </SidebarContent>
       <SidebarFooter>
-        {" "}
-        <NavUser />{" "}
+        <NavUser />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

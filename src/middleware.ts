@@ -28,11 +28,32 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(signInUrl);
     }
 
-    // Check role-based access for certain routes
+    const userRole = token.role as string;
+
+    // Agents tab - only ADMIN and SUPERADMIN
+    if (pathname.startsWith("/dashboard/agents")) {
+      if (!["ADMIN", "SUPERADMIN"].includes(userRole)) {
+        return NextResponse.redirect(new URL("/dashboard/properties", request.url));
+      }
+    }
+
+    // Documents - only AGENT, ADMIN, SUPERADMIN
+    if (pathname.startsWith("/dashboard/documents")) {
+      if (!["AGENT", "ADMIN", "SUPERADMIN"].includes(userRole)) {
+        return NextResponse.redirect(new URL("/dashboard/properties", request.url));
+      }
+    }
+
+    // Settings management - only ADMIN and SUPERADMIN
+    if (pathname.startsWith("/dashboard/settings") && !pathname.startsWith("/dashboard/settings/profile")) {
+      if (!["ADMIN", "SUPERADMIN"].includes(userRole)) {
+        return NextResponse.redirect(new URL("/dashboard/settings/profile", request.url));
+      }
+    }
+
+    // Property creation - AGENT, ADMIN, SUPERADMIN only
     if (pathname.startsWith("/dashboard/properties/create")) {
-      const userRole = token.role as string;
-      if (!["AGENT", "ADMIN"].includes(userRole)) {
-        // Redirect to properties page if not authorized
+      if (!["AGENT", "ADMIN", "SUPERADMIN"].includes(userRole)) {
         return NextResponse.redirect(new URL("/dashboard/properties", request.url));
       }
     }

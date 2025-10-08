@@ -1,0 +1,176 @@
+"use client";
+
+import { FC, useState } from "react";
+import { trpc } from "@/server/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Plus, Search, UserCheck, Shield } from "lucide-react";
+import toast from "react-hot-toast";
+import AgentCard from "./AgentCard";
+import CreateAgentModal from "./CreateAgentModal";
+import { useRBAC } from "@/hooks/useRBAC";
+
+const AgentsDashboard: FC = () => {
+  const utils = trpc.useUtils();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const { canCreateAgents } = useRBAC();
+
+  // Fetch all agents
+  const { data: agents, isLoading } = trpc.agent.list.useQuery();
+
+  // Delete mutation
+  const deleteMutation = trpc.agent.delete.useMutation({
+    onSuccess: () => {
+      utils.agent.list.invalidate();
+      toast.success("Agent deleted successfully!");
+    },
+    onError: (error) => {
+      toast.error(`Error: ${error.message}`);
+    },
+  });
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this agent? All their permissions will be removed.")) {
+      deleteMutation.mutate({ id });
+    }
+  };
+
+  // Filter agents based on search
+  const filteredAgents = agents?.filter((agent) => {
+    const matchesSearch =
+      searchTerm === "" ||
+      agent.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      agent.email.toLowerCase().includes(searchTerm.toLowerCase());
+
+    return matchesSearch;
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading agents...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Shield className="h-8 w-8" />
+            Agent Management
+          </h1>
+          <p className="text-gray-600 mt-1">
+            Manage agents and their property access permissions
+          </p>
+        </div>
+        {canCreateAgents && (
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Create New Agent
+          </Button>
+        )}
+      </div>
+
+      {/* Search */}
+      <div className="bg-white p-6 rounded-lg border border-gray-200 space-y-4">
+        <div className="flex items-center gap-2">
+          <Search className="h-5 w-5 text-gray-400" />
+          <h2 className="text-lg font-semibold">Search Agents</h2>
+        </div>
+
+        <div>
+          <Label htmlFor="search">Search</Label>
+          <Input
+            id="search"
+            placeholder="Search by name or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="mt-1"
+          />
+        </div>
+
+        {searchTerm && (
+          <Button variant="outline" onClick={() => setSearchTerm("")}>
+            Clear Search
+          </Button>
+        )}
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <p className="text-sm text-gray-600">Total Agents</p>
+          <p className="text-2xl font-bold">{agents?.length || 0}</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <p className="text-sm text-gray-600">Active Agents</p>
+          <p className="text-2xl font-bold">
+            {agents?.filter((a) => a.agentPermissions.length > 0).length || 0}
+          </p>
+        </div>
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <p className="text-sm text-gray-600">Total Permissions</p>
+          <p className="text-2xl font-bold">
+            {agents?.reduce((sum, a) => sum + a.agentPermissions.length, 0) || 0}
+          </p>
+        </div>
+      </div>
+
+      {/* Agents Grid */}
+      {filteredAgents && filteredAgents.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredAgents.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white p-12 rounded-lg border border-gray-200 text-center">
+          <div className="text-gray-400 mb-4">
+            <UserCheck className="mx-auto h-12 w-12" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            No agents found
+          </h3>
+          <p className="text-gray-600 mb-4">
+            {searchTerm
+              ? "Try adjusting your search"
+              : "Get started by creating your first agent"}
+          </p>
+          {!searchTerm && canCreateAgents && (
+            <Button onClick={() => setShowCreateModal(true)}>
+              Create Your First Agent
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Create Agent Modal */}
+      {showCreateModal && (
+        <CreateAgentModal
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={() => {
+            setShowCreateModal(false);
+            utils.agent.list.invalidate();
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default AgentsDashboard;

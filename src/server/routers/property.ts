@@ -208,7 +208,30 @@ export const propertyRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
       }
 
-      if (property.ownerId !== user.id && user.role !== "ADMIN") {
+      // Check permissions
+      const canUpdate =
+        user.role === "ADMIN" ||
+        user.role === "SUPERADMIN" ||
+        property.ownerId === user.id;
+
+      // For agents, check if they have edit permission
+      if (!canUpdate && user.role === "AGENT") {
+        const permission = await prisma.agentPermission.findUnique({
+          where: {
+            agentId_propertyId: {
+              agentId: user.id,
+              propertyId: input.id,
+            },
+          },
+        });
+
+        if (!permission || !permission.canEdit) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You don't have permission to update this property",
+          });
+        }
+      } else if (!canUpdate) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "You don't have permission to update this property",
@@ -254,7 +277,30 @@ export const propertyRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
       }
 
-      if (property.ownerId !== user.id && user.role !== "ADMIN") {
+      // Check permissions
+      const canDelete =
+        user.role === "ADMIN" ||
+        user.role === "SUPERADMIN" ||
+        property.ownerId === user.id;
+
+      // For agents, check if they have delete permission
+      if (!canDelete && user.role === "AGENT") {
+        const permission = await prisma.agentPermission.findUnique({
+          where: {
+            agentId_propertyId: {
+              agentId: user.id,
+              propertyId: input.id,
+            },
+          },
+        });
+
+        if (!permission || !permission.canDelete) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You don't have permission to delete this property",
+          });
+        }
+      } else if (!canDelete) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "You don't have permission to delete this property",
@@ -275,6 +321,73 @@ export const propertyRouter = router({
       throw new TRPCError({ code: "UNAUTHORIZED", message: "Unauthorized" });
     }
 
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, role: true },
+    });
+
+    if (!user) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+    }
+
+    // ADMIN and SUPERADMIN can see all properties
+    if (["ADMIN", "SUPERADMIN"].includes(user.role)) {
+      return await prisma.property.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+    }
+
+    // AGENT can see only assigned properties
+    if (user.role === "AGENT") {
+      const permissions = await prisma.agentPermission.findMany({
+        where: {
+          agentId: user.id,
+          canView: true,
+        },
+        select: {
+          propertyId: true,
+        },
+      });
+
+      const propertyIds = permissions.map((p) => p.propertyId);
+
+      return await prisma.property.findMany({
+        where: {
+          id: { in: propertyIds },
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          agentPermissions: {
+            where: {
+              agentId: user.id,
+            },
+            select: {
+              canView: true,
+              canEdit: true,
+              canDelete: true,
+            },
+          },
+        },
+      });
+    }
+
+    // CUSTOMER and others see only their own properties
     return await prisma.property.findMany({
       where: { ownerId: session.user.id },
       orderBy: { createdAt: "desc" },
