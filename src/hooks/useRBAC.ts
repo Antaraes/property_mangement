@@ -11,7 +11,7 @@ export function useRBAC() {
   return {
     role: userRole,
     isCustomer: userRole === "CUSTOMER",
-    isAgent: userRole === "AGENT",
+    isAgent: userRole === "EMPLOYEE",
     isAdmin: userRole === "ADMIN",
     isSuperAdmin: userRole === "SUPERADMIN",
 
@@ -26,5 +26,6 @@ export function useRBAC() {
     canViewAllProperties: FEATURE_ACCESS.viewAllProperties.includes(userRole),
     canManageSettings: FEATURE_ACCESS.manageSettings.includes(userRole),
     canViewDocuments: FEATURE_ACCESS.viewDocuments.includes(userRole),
+    canManageEmployees: FEATURE_ACCESS.createAgents.includes(userRole),
   };
 }

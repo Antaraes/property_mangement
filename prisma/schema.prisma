@@ -13,59 +13,186 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ========================================
+// CORE USER MANAGEMENT
+// ========================================
 
 model User {
-  id         String     @id @default(uuid())
-  name       String
-  image     String?
-  first_name String?
-  last_name String?
-  email         String          @unique
+  id            String    @id @default(uuid())
+  name          String
+  image         String?
+  first_name    String?
+  last_name     String?
+  email         String    @unique
   emailVerified DateTime?
-  password   String?
-  role       Role       @default(CUSTOMER)
-  properties Property[]
+  password      String?
+  phone         String?
+  role          Role      @default(CUSTOMER)
+
+  // Employee-specific fields
+  companyId     String?
+  company       Company?  @relation("CompanyEmployees", fields: [companyId], references: [id], onDelete: SetNull)
+
+  // Employee area assignments (for geographical responsibility)
+  assignedAreas EmployeeArea[]
+
+  // Employee property assignments
+  assignedProperties Property[] @relation("AssignedEmployee")
+
+  // Leads managed by this employee
+  managedLeads  Lead[]    @relation("LeadAssignee")
+
+  // Leads created by customers
+  customerLeads Lead[]    @relation("CustomerLeads")
+
+  // Transactions
+  transactions  Transaction[]
+
+  // Messages
+  sentMessages     Message[] @relation("Sender")
+  receivedMessages Message[] @relation("Receiver")
+
+  // Auth relations
   accounts      Account[]
   sessions      Session[]
-
-  // Agent relationships
-  agentPermissions AgentPermission[] // Properties this agent can access
-  createdAgents    AgentPermission[] @relation("CreatedBy") // Agents created by this admin
-
   Authenticator Authenticator[]
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([companyId])
+  @@index([email])
 }
 
 enum Role {
-  AGENT
-  CUSTOMER
-  ADMIN
-  SUPERADMIN
+  EMPLOYEE      // Replaces AGENT - staff who manage properties/areas
+  CUSTOMER      // End users who buy/rent
+  ADMIN         // Company admin
+  SUPERADMIN    // Platform superadmin
 }
+
+// ========================================
+// COMPANY & GEOGRAPHICAL STRUCTURE
+// ========================================
+
+model Company {
+  id          String     @id @default(uuid())
+  name        String
+  description String?
+  logo        String?
+  email       String?
+  phone       String?
+  website     String?
+  address     String?
+
+  // Relations
+  employees   User[]     @relation("CompanyEmployees")
+  properties  Property[]
+  countries   Country[]
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Country {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String?  @unique // ISO country code (e.g., "US", "TH", "AE")
+
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  areas     Area[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+model Area {
+  id          String   @id @default(uuid())
+  name        String   // e.g., "Dubai Marina", "Bangkok Downtown"
+  description String?
+
+  countryId   String
+  country     Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  // Relations
+  properties       Property[]
+  employeeAssignments EmployeeArea[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([countryId])
+}
+
+// Employee-Area assignment (many-to-many with extra fields)
+model EmployeeArea {
+  id         String   @id @default(uuid())
+
+  employeeId String
+  employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  areaId     String
+  area       Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  // Permissions for this area
+  canManage  Boolean  @default(true)  // Can manage properties in this area
+  isLead     Boolean  @default(false) // Is area lead/manager
+
+  assignedAt DateTime @default(now())
+
+  @@unique([employeeId, areaId])
+  @@index([employeeId])
+  @@index([areaId])
+}
+
+// ========================================
+// PROPERTY MANAGEMENT
+// ========================================
 
 model Property {
   id           String       @id @default(uuid())
   name         String
   location     String
-  description String
+  description  String
   price        Int
-  images       String[] // Storing as array of URLs
+  images       String[]     // Array of image URLs
   bedrooms     Int
   bathrooms    Int
-  area         Int
+  area         Int          // Size in sq ft/m
   purpose      Purpose
   paidType     PaidType
   propertyType PropertyType
-  ownerType    OwnerType
-  owner        User        @relation(fields: [ownerId], references: [id])
-  ownerId      String
+  status       PropertyStatus @default(AVAILABLE)
 
-  // Agent permissions
-  agentPermissions AgentPermission[]
+  // Company ownership (company owns all properties)
+  companyId    String
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  // Geographical assignment
+  areaId       String?
+  areaLocation Area?        @relation(fields: [areaId], references: [id], onDelete: SetNull)
+
+  // Employee assignment (who manages this property)
+  assignedToId String?
+  assignedTo   User?        @relation("AssignedEmployee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  // Relations
+  leads        Lead[]
+  transactions Transaction[]
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([companyId])
+  @@index([areaId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([purpose])
+  @@index([propertyType])
 }
 
 enum Purpose {
@@ -86,14 +213,166 @@ enum PropertyType {
   HOUSE
   VILLA
   COMMERCIAL
+  LAND
+  OFFICE
 }
 
-enum OwnerType {
-  AGENT
-  CUSTOMER
-  ADMIN
+enum PropertyStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  RENTED
+  MAINTENANCE
+  UNAVAILABLE
 }
 
+// ========================================
+// CRM & LEAD MANAGEMENT
+// ========================================
+
+model Lead {
+  id           String     @id @default(uuid())
+
+  // Customer who made the inquiry
+  customerId   String
+  customer     User       @relation("CustomerLeads", fields: [customerId], references: [id], onDelete: Cascade)
+
+  // Property of interest
+  propertyId   String
+  property     Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // Lead details
+  message      String?
+  phone        String?
+  preferredContactMethod String? // email, phone, whatsapp
+  status       LeadStatus @default(PENDING)
+  priority     LeadPriority @default(MEDIUM)
+
+  // Employee assignment
+  assignedToId String?
+  assignedTo   User?      @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  // Follow-up tracking
+  followUpDate DateTime?
+  notes        String?
+
+  // Conversion tracking
+  convertedToTransactionId String?
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([customerId])
+  @@index([propertyId])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+enum LeadStatus {
+  PENDING       // New inquiry
+  CONTACTED     // Employee reached out
+  SCHEDULED     // Viewing/meeting scheduled
+  NEGOTIATING   // In negotiation
+  CLOSED_WON    // Converted to sale/rental
+  CLOSED_LOST   // Lost to competitor or customer declined
+  CANCELLED     // Customer cancelled
+}
+
+enum LeadPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// ========================================
+// TRANSACTION MANAGEMENT
+// ========================================
+
+model Transaction {
+  id            String            @id @default(uuid())
+
+  // Customer
+  customerId    String
+  customer      User              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  // Property
+  propertyId    String
+  property      Property          @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+
+  // Transaction details
+  type          TransactionType
+  status        TransactionStatus @default(PENDING)
+  amount        Int
+  currency      String            @default("USD")
+
+  // Payment tracking
+  paymentMethod String?
+  paymentDate   DateTime?
+
+  // Contract details
+  contractStartDate DateTime?
+  contractEndDate   DateTime?
+
+  // Documents
+  documents     String[]          // Array of document URLs
+
+  // Additional terms
+  notes         String?
+
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([customerId])
+  @@index([propertyId])
+  @@index([status])
+  @@index([type])
+}
+
+enum TransactionType {
+  RENT
+  PURCHASE
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+// ========================================
+// MESSAGING SYSTEM
+// ========================================
+
+model Message {
+  id          String   @id @default(uuid())
+
+  senderId    String
+  sender      User     @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  receiverId  String
+  receiver    User     @relation("Receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  subject     String?
+  content     String
+  read        Boolean  @default(false)
+
+  // Optional: Link to property or lead
+  propertyId  String?
+  leadId      String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([read])
+}
+
+// ========================================
+// NEXTAUTH MODELS
+// ========================================
 
 model Account {
   userId            String
@@ -107,33 +386,32 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
- 
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
- 
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
+
   @@id([provider, providerAccountId])
 }
- 
+
 model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
- 
+
 model VerificationToken {
   identifier String
   token      String
   expires    DateTime
- 
+
   @@id([identifier, token])
 }
-
 
 model Authenticator {
   credentialID         String  @unique
@@ -148,31 +426,4 @@ model Authenticator {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, credentialID])
-}
-
-// Agent Permission System
-model AgentPermission {
-  id         String   @id @default(uuid())
-  agentId    String   // The agent user
-  propertyId String   // The property they can access
-
-  // Permission types
-  canView    Boolean  @default(true)
-  canEdit    Boolean  @default(false)
-  canDelete  Boolean  @default(false)
-
-  // Relationships
-  agent      User     @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  // Who created this permission
-  createdBy   User     @relation("CreatedBy", fields: [createdById], references: [id])
-  createdById String
-
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@unique([agentId, propertyId]) // One permission record per agent-property pair
-  @@index([agentId])
-  @@index([propertyId])
 }

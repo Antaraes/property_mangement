@@ -114,11 +114,11 @@ export const propertyRouter = router({
         bathrooms: z.number().min(1),
         area: z.number().positive(),
         purpose: z.enum(["RENT", "BUY"]),
-        paidType: z.enum(["YEARLY", "MONTHLY", "WEEKLY", "DAILY"]),
-        propertyType: z.enum(["APARTMENT", "HOUSE", "VILLA", "COMMERCIAL"]),
+        paidType: z.enum(["YEARLY", "MONTHLY", "WEEKLY", "DAILY", "ONCE"]),
+        propertyType: z.enum(["APARTMENT", "HOUSE", "VILLA", "COMMERCIAL", "LAND", "OFFICE"]),
       })
     )
-    .mutation(async ({ input, ctx }: { input: any; ctx: any }) => {
+    .mutation(async ({ input }) => {
       console.log(input);
       const session = await getServerSession(authOptions);
       console.log(session);
@@ -144,18 +144,32 @@ export const propertyRouter = router({
       }
 
       // Restrict property creation based on role
-      if (!["AGENT", "ADMIN"].includes(user.role)) {
+      if (!["EMPLOYEE", "ADMIN", "SUPERADMIN"].includes(user.role)) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "Only AGENT or ADMIN can create a property",
+          message: "Only EMPLOYEE, ADMIN, or SUPERADMIN can create a property",
+        });
+      }
+
+      // Get user's company
+      const userWithCompany = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { companyId: true },
+      });
+
+      if (!userWithCompany?.companyId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "User must be assigned to a company to create properties",
         });
       }
 
       return await prisma.property.create({
         data: {
           ...input,
-          ownerType: user.role,
-          ownerId: user.id, // Set ownerId from authenticated user
+          companyId: userWithCompany.companyId,
+          assignedToId: user.role === "EMPLOYEE" ? user.id : null,
+          status: "AVAILABLE",
         },
       });
     }),
@@ -175,8 +189,10 @@ export const propertyRouter = router({
         purpose: z.enum(["RENT", "BUY"]).optional(),
         paidType: z.enum(["YEARLY", "MONTHLY", "WEEKLY", "DAILY"]).optional(),
         propertyType: z
-          .enum(["APARTMENT", "HOUSE", "VILLA", "COMMERCIAL"])
+          .enum(["APARTMENT", "HOUSE", "VILLA", "COMMERCIAL", "LAND", "OFFICE"])
           .optional(),
+        status: z.enum(["AVAILABLE", "RESERVED", "SOLD", "RENTED", "MAINTENANCE", "UNAVAILABLE"]).optional(),
+        assignedToId: z.string().nullable().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -198,51 +214,60 @@ export const propertyRouter = router({
         });
       }
 
-      // Check if user owns the property or is admin
+      // Get user info
       const user = await prisma.user.findUnique({
         where: { id: session.user.id },
-        select: { id: true, role: true },
+        select: { id: true, role: true, companyId: true },
       });
 
       if (!user) {
         throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
       }
 
-      // Check permissions
-      const canUpdate =
-        user.role === "ADMIN" ||
-        user.role === "SUPERADMIN" ||
-        property.ownerId === user.id;
-
-      // For agents, check if they have edit permission
-      if (!canUpdate && user.role === "AGENT") {
-        const permission = await prisma.agentPermission.findUnique({
-          where: {
-            agentId_propertyId: {
-              agentId: user.id,
-              propertyId: input.id,
-            },
-          },
-        });
-
-        if (!permission || !permission.canEdit) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "You don't have permission to update this property",
-          });
-        }
-      } else if (!canUpdate) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You don't have permission to update this property",
+      // ADMIN and SUPERADMIN can update all properties
+      if (user.role === "ADMIN" || user.role === "SUPERADMIN") {
+        const { id, ...updateData } = input;
+        return await prisma.property.update({
+          where: { id },
+          data: updateData,
         });
       }
 
-      const { id, ...updateData } = input;
+      // For employees, check if they have access via area or direct assignment
+      if (user.role === "EMPLOYEE") {
+        // Check if assigned directly to property
+        if (property.assignedToId === user.id) {
+          const { id, ...updateData } = input;
+          return await prisma.property.update({
+            where: { id },
+            data: updateData,
+          });
+        }
 
-      return await prisma.property.update({
-        where: { id },
-        data: updateData,
+        // Check if employee has access via area assignment
+        if (property.areaId) {
+          const employeeArea = await prisma.employeeArea.findUnique({
+            where: {
+              employeeId_areaId: {
+                employeeId: user.id,
+                areaId: property.areaId,
+              },
+            },
+          });
+
+          if (employeeArea && employeeArea.canManage) {
+            const { id, ...updateData } = input;
+            return await prisma.property.update({
+              where: { id },
+              data: updateData,
+            });
+          }
+        }
+      }
+
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "You don't have permission to update this property",
       });
     }),
 
@@ -267,51 +292,58 @@ export const propertyRouter = router({
         });
       }
 
-      // Check if user owns the property or is admin
+      // Get user info
       const user = await prisma.user.findUnique({
         where: { id: session.user.id },
-        select: { id: true, role: true },
+        select: { id: true, role: true, companyId: true },
       });
 
       if (!user) {
         throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
       }
 
-      // Check permissions
-      const canDelete =
-        user.role === "ADMIN" ||
-        user.role === "SUPERADMIN" ||
-        property.ownerId === user.id;
-
-      // For agents, check if they have delete permission
-      if (!canDelete && user.role === "AGENT") {
-        const permission = await prisma.agentPermission.findUnique({
-          where: {
-            agentId_propertyId: {
-              agentId: user.id,
-              propertyId: input.id,
-            },
-          },
+      // ADMIN and SUPERADMIN can delete all properties
+      if (user.role === "ADMIN" || user.role === "SUPERADMIN") {
+        await prisma.property.delete({
+          where: { id: input.id },
         });
-
-        if (!permission || !permission.canDelete) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "You don't have permission to delete this property",
-          });
-        }
-      } else if (!canDelete) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You don't have permission to delete this property",
-        });
+        return { success: true, message: "Property deleted successfully" };
       }
 
-      await prisma.property.delete({
-        where: { id: input.id },
-      });
+      // For employees, check if they have access via area or direct assignment
+      if (user.role === "EMPLOYEE") {
+        // Check if assigned directly to property
+        if (property.assignedToId === user.id) {
+          await prisma.property.delete({
+            where: { id: input.id },
+          });
+          return { success: true, message: "Property deleted successfully" };
+        }
 
-      return { success: true, message: "Property deleted successfully" };
+        // Check if employee has access via area assignment
+        if (property.areaId) {
+          const employeeArea = await prisma.employeeArea.findUnique({
+            where: {
+              employeeId_areaId: {
+                employeeId: user.id,
+                areaId: property.areaId,
+              },
+            },
+          });
+
+          if (employeeArea && employeeArea.canManage) {
+            await prisma.property.delete({
+              where: { id: input.id },
+            });
+            return { success: true, message: "Property deleted successfully" };
+          }
+        }
+      }
+
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "You don't have permission to delete this property",
+      });
     }),
 
   getMyProperties: t.procedure.query(async () => {
@@ -323,75 +355,96 @@ export const propertyRouter = router({
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, role: true },
+      select: { id: true, role: true, companyId: true },
     });
 
     if (!user) {
       throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
     }
 
-    // ADMIN and SUPERADMIN can see all properties
+    // ADMIN and SUPERADMIN can see all properties in their company
     if (["ADMIN", "SUPERADMIN"].includes(user.role)) {
+      const where = user.companyId ? { companyId: user.companyId } : {};
+
       return await prisma.property.findMany({
+        where,
         orderBy: { createdAt: "desc" },
         include: {
-          owner: {
+          company: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          assignedTo: {
             select: {
               id: true,
               name: true,
               email: true,
             },
           },
+          areaLocation: {
+            select: {
+              id: true,
+              name: true,
+              country: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
         },
       });
     }
 
-    // AGENT can see only assigned properties
-    if (user.role === "AGENT") {
-      const permissions = await prisma.agentPermission.findMany({
+    // EMPLOYEE can see properties they're assigned to or in their areas
+    if (user.role === "EMPLOYEE") {
+      // Get employee's assigned areas
+      const employeeAreas = await prisma.employeeArea.findMany({
         where: {
-          agentId: user.id,
-          canView: true,
+          employeeId: user.id,
+          canManage: true,
         },
         select: {
-          propertyId: true,
+          areaId: true,
         },
       });
 
-      const propertyIds = permissions.map((p) => p.propertyId);
+      const areaIds = employeeAreas.map((ea) => ea.areaId);
 
       return await prisma.property.findMany({
         where: {
-          id: { in: propertyIds },
+          OR: [
+            { assignedToId: user.id }, // Directly assigned properties
+            { areaId: { in: areaIds } }, // Properties in managed areas
+          ],
         },
         orderBy: { createdAt: "desc" },
         include: {
-          owner: {
+          company: {
             select: {
               id: true,
               name: true,
-              email: true,
             },
           },
-          agentPermissions: {
-            where: {
-              agentId: user.id,
-            },
+          areaLocation: {
             select: {
-              canView: true,
-              canEdit: true,
-              canDelete: true,
+              id: true,
+              name: true,
+              country: {
+                select: {
+                  name: true,
+                },
+              },
             },
           },
         },
       });
     }
 
-    // CUSTOMER and others see only their own properties
-    return await prisma.property.findMany({
-      where: { ownerId: session.user.id },
-      orderBy: { createdAt: "desc" },
-    });
+    // CUSTOMER - return empty array or could return properties they're interested in
+    return [];
   }),
   bulkImport: t.procedure
     .input(
@@ -407,8 +460,9 @@ export const propertyRouter = router({
             bathrooms: z.number().min(1),
             area: z.number().positive(),
             purpose: z.enum(["RENT", "BUY"]),
-            paidType: z.enum(["YEARLY", "MONTHLY", "WEEKLY", "DAILY"]),
-            propertyType: z.enum(["APARTMENT", "HOUSE", "VILLA", "COMMERCIAL"]),
+            paidType: z.enum(["YEARLY", "MONTHLY", "WEEKLY", "DAILY", "ONCE"]),
+            propertyType: z.enum(["APARTMENT", "HOUSE", "VILLA", "COMMERCIAL", "LAND", "OFFICE"]),
+            areaId: z.string().optional(),
           })
         ),
       })
@@ -422,17 +476,24 @@ export const propertyRouter = router({
 
       const user = await prisma.user.findUnique({
         where: { id: session.user.id },
-        select: { id: true, role: true },
+        select: { id: true, role: true, companyId: true },
       });
 
       if (!user) {
         throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
       }
 
-      if (!["AGENT", "ADMIN"].includes(user.role)) {
+      if (!["EMPLOYEE", "ADMIN", "SUPERADMIN"].includes(user.role)) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "Only AGENT or ADMIN can import properties",
+          message: "Only EMPLOYEE, ADMIN, or SUPERADMIN can import properties",
+        });
+      }
+
+      if (!user.companyId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "User must be assigned to a company to import properties",
         });
       }
 
@@ -442,8 +503,9 @@ export const propertyRouter = router({
           prisma.property.create({
             data: {
               ...property,
-              ownerType: user.role,
-              ownerId: user.id,
+              companyId: user.companyId!,
+              assignedToId: user.role === "EMPLOYEE" ? user.id : null,
+              status: "AVAILABLE",
             },
           })
         )

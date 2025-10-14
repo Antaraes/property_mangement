@@ -1,13 +1,13 @@
 import { prisma } from "./prisma";
 
-export type UserRole = "CUSTOMER" | "AGENT" | "ADMIN" | "SUPERADMIN";
+export type UserRole = "CUSTOMER" | "EMPLOYEE" | "ADMIN" | "SUPERADMIN";
 
 export type Permission = "canView" | "canEdit" | "canDelete";
 
-// Role hierarchy: SUPERADMIN > ADMIN > AGENT > CUSTOMER
+// Role hierarchy: SUPERADMIN > ADMIN > EMPLOYEE > CUSTOMER
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
   CUSTOMER: 0,
-  AGENT: 1,
+  EMPLOYEE: 1,
   ADMIN: 2,
   SUPERADMIN: 3,
 };
@@ -17,9 +17,14 @@ export function hasRole(userRole: UserRole, requiredRole: UserRole): boolean {
   return ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[requiredRole];
 }
 
-// Check if a user can manage agents (create/assign permissions)
-export function canManageAgents(role: UserRole): boolean {
+// Check if a user can manage employees (create/assign to areas)
+export function canManageEmployees(role: UserRole): boolean {
   return hasRole(role, "ADMIN");
+}
+
+// Legacy alias for backward compatibility
+export function canManageAgents(role: UserRole): boolean {
+  return canManageEmployees(role);
 }
 
 // Check if a user can access all properties
@@ -27,44 +32,90 @@ export function canAccessAllProperties(role: UserRole): boolean {
   return hasRole(role, "ADMIN");
 }
 
-// Check if an agent has permission for a specific property
-export async function checkAgentPermission(
+// Check if an employee has access to a specific property
+export async function checkEmployeePropertyAccess(
   userId: string,
-  propertyId: string,
-  permission: Permission = "canView"
+  propertyId: string
 ): Promise<boolean> {
-  const agentPermission = await prisma.agentPermission.findUnique({
-    where: {
-      agentId_propertyId: {
-        agentId: userId,
-        propertyId: propertyId,
-      },
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: {
+      assignedToId: true,
+      areaId: true,
     },
   });
 
-  if (!agentPermission) {
+  if (!property) {
     return false;
   }
 
-  return agentPermission[permission] === true;
+  // Check if employee is directly assigned to this property
+  if (property.assignedToId === userId) {
+    return true;
+  }
+
+  // Check if employee has access to the property's area
+  if (property.areaId) {
+    const employeeArea = await prisma.employeeArea.findUnique({
+      where: {
+        employeeId_areaId: {
+          employeeId: userId,
+          areaId: property.areaId,
+        },
+      },
+    });
+
+    if (employeeArea && employeeArea.canManage) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
-// Get all properties accessible by an agent
+// Get all properties accessible by an employee
+export async function getEmployeeAccessibleProperties(
+  userId: string
+): Promise<string[]> {
+  // Get directly assigned properties
+  const assignedProperties = await prisma.property.findMany({
+    where: { assignedToId: userId },
+    select: { id: true },
+  });
+
+  // Get properties in areas the employee manages
+  const employeeAreas = await prisma.employeeArea.findMany({
+    where: {
+      employeeId: userId,
+      canManage: true,
+    },
+    select: { areaId: true },
+  });
+
+  const areaIds = employeeAreas.map((ea) => ea.areaId);
+
+  const areaProperties = await prisma.property.findMany({
+    where: {
+      areaId: { in: areaIds },
+    },
+    select: { id: true },
+  });
+
+  // Combine and deduplicate
+  const allPropertyIds = [
+    ...assignedProperties.map((p) => p.id),
+    ...areaProperties.map((p) => p.id),
+  ];
+
+  return Array.from(new Set(allPropertyIds));
+}
+
+// Legacy function for backward compatibility
 export async function getAgentAccessibleProperties(
   userId: string,
   permission: Permission = "canView"
 ): Promise<string[]> {
-  const permissions = await prisma.agentPermission.findMany({
-    where: {
-      agentId: userId,
-      [permission]: true,
-    },
-    select: {
-      propertyId: true,
-    },
-  });
-
-  return permissions.map((p) => p.propertyId);
+  return getEmployeeAccessibleProperties(userId);
 }
 
 // Check if user can perform action on property
@@ -72,7 +123,6 @@ export async function canAccessProperty(
   userId: string,
   userRole: UserRole,
   propertyId: string,
-  ownerId: string,
   permission: Permission = "canView"
 ): Promise<boolean> {
   // SUPERADMIN and ADMIN can access all properties
@@ -80,29 +130,64 @@ export async function canAccessProperty(
     return true;
   }
 
-  // Owner can access their own property
-  if (userId === ownerId) {
+  // For employees, check area/property assignments
+  if (userRole === "EMPLOYEE") {
+    return await checkEmployeePropertyAccess(userId, propertyId);
+  }
+
+  // Customers can only view properties (not edit/delete)
+  if (userRole === "CUSTOMER" && permission === "canView") {
+    return true; // All customers can view properties
+  }
+
+  return false;
+}
+
+// Check if user can manage a specific area
+export async function canManageArea(
+  userId: string,
+  userRole: UserRole,
+  areaId: string
+): Promise<boolean> {
+  // Admins can manage all areas
+  if (hasRole(userRole, "ADMIN")) {
     return true;
   }
 
-  // For agents, check permissions
-  if (userRole === "AGENT") {
-    return await checkAgentPermission(userId, propertyId, permission);
+  // Check if employee is assigned to this area with manage permissions
+  if (userRole === "EMPLOYEE") {
+    const employeeArea = await prisma.employeeArea.findUnique({
+      where: {
+        employeeId_areaId: {
+          employeeId: userId,
+          areaId: areaId,
+        },
+      },
+    });
+
+    return employeeArea?.canManage === true;
   }
 
-  // Customers cannot access properties they don't own
   return false;
 }
 
 // Role-based feature access
 export const FEATURE_ACCESS = {
-  viewAgentTab: ["ADMIN", "SUPERADMIN"],
-  createAgents: ["ADMIN", "SUPERADMIN"],
-  assignPermissions: ["ADMIN", "SUPERADMIN"],
-  createProperties: ["AGENT", "ADMIN", "SUPERADMIN"],
+  viewEmployeeTab: ["ADMIN", "SUPERADMIN"],
+  viewAgentTab: ["ADMIN", "SUPERADMIN"], // Legacy alias
+  createEmployees: ["ADMIN", "SUPERADMIN"],
+  createAgents: ["ADMIN", "SUPERADMIN"], // Legacy alias
+  assignEmployeesToAreas: ["ADMIN", "SUPERADMIN"],
+  assignPermissions: ["ADMIN", "SUPERADMIN"], // Legacy alias
+  createProperties: ["EMPLOYEE", "ADMIN", "SUPERADMIN"],
   viewAllProperties: ["ADMIN", "SUPERADMIN"],
   manageSettings: ["ADMIN", "SUPERADMIN"],
-  viewDocuments: ["AGENT", "ADMIN", "SUPERADMIN"],
+  viewDocuments: ["EMPLOYEE", "ADMIN", "SUPERADMIN"],
+  manageLeads: ["EMPLOYEE", "ADMIN", "SUPERADMIN"],
+  viewTransactions: ["EMPLOYEE", "ADMIN", "SUPERADMIN"],
+  manageCompany: ["ADMIN", "SUPERADMIN"],
+  manageAreas: ["ADMIN", "SUPERADMIN"],
+  sendMessages: ["EMPLOYEE", "ADMIN", "SUPERADMIN"],
 } as const;
 
 export function hasFeatureAccess(
@@ -110,4 +195,32 @@ export function hasFeatureAccess(
   feature: keyof typeof FEATURE_ACCESS
 ): boolean {
   return FEATURE_ACCESS[feature].includes(userRole);
+}
+
+// Get employee's assigned areas
+export async function getEmployeeAreas(userId: string) {
+  return await prisma.employeeArea.findMany({
+    where: { employeeId: userId },
+    include: {
+      area: {
+        include: {
+          country: true,
+        },
+      },
+    },
+  });
+}
+
+// Check if employee is area lead
+export async function isAreaLead(userId: string, areaId: string): Promise<boolean> {
+  const employeeArea = await prisma.employeeArea.findUnique({
+    where: {
+      employeeId_areaId: {
+        employeeId: userId,
+        areaId: areaId,
+      },
+    },
+  });
+
+  return employeeArea?.isLead === true;
 }

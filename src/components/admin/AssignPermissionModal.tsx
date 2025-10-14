@@ -13,13 +13,12 @@ interface AssignPermissionModalProps {
     id: string;
     name: string;
     email: string;
-    agentPermissions: Array<{
-      property: {
-        id: string;
-        name: string;
-        location: string;
-      };
+    assignedProperties?: Array<{
+      id: string;
+      name: string;
+      location: string;
     }>;
+    assignedAreas?: any[];
   };
   onClose: () => void;
 }
@@ -37,19 +36,19 @@ const AssignPermissionModal: FC<AssignPermissionModalProps> = ({
   });
 
   // Fetch available properties
-  const { data: properties } = trpc.agent.getAvailableProperties.useQuery();
+  const { data: properties } = trpc.property.list.useQuery({});
 
-  // Fetch agent details with permissions
-  const { data: agentDetails, isLoading } = trpc.agent.getById.useQuery({
+  // Fetch employee details with permissions
+  const { data: agentDetails, isLoading } = trpc.employee.getById.useQuery({
     id: agent.id,
   });
 
-  // Assign permission mutation
-  const assignMutation = trpc.agent.assignPermission.useMutation({
+  // Assign property mutation
+  const assignMutation = trpc.property.update.useMutation({
     onSuccess: () => {
-      toast.success("Permission assigned successfully!");
-      utils.agent.getById.invalidate({ id: agent.id });
-      utils.agent.list.invalidate();
+      toast.success("Property assigned successfully!");
+      utils.employee.getById.invalidate({ id: agent.id });
+      utils.employee.list.invalidate();
       setSelectedProperty("");
       setPermissions({ canView: true, canEdit: false, canDelete: false });
     },
@@ -58,12 +57,12 @@ const AssignPermissionModal: FC<AssignPermissionModalProps> = ({
     },
   });
 
-  // Remove permission mutation
-  const removeMutation = trpc.agent.removePermission.useMutation({
+  // Remove property assignment mutation
+  const removeMutation = trpc.property.update.useMutation({
     onSuccess: () => {
-      toast.success("Permission removed successfully!");
-      utils.agent.getById.invalidate({ id: agent.id });
-      utils.agent.list.invalidate();
+      toast.success("Property assignment removed successfully!");
+      utils.employee.getById.invalidate({ id: agent.id });
+      utils.employee.list.invalidate();
     },
     onError: (error) => {
       toast.error(`Error: ${error.message}`);
@@ -77,23 +76,22 @@ const AssignPermissionModal: FC<AssignPermissionModalProps> = ({
     }
 
     assignMutation.mutate({
-      agentId: agent.id,
-      propertyId: selectedProperty,
-      ...permissions,
+      id: selectedProperty,
+      assignedToId: agent.id,
     });
   };
 
   const handleRemove = (propertyId: string) => {
-    if (window.confirm("Are you sure you want to remove this permission?")) {
+    if (window.confirm("Are you sure you want to remove this assignment?")) {
       removeMutation.mutate({
-        agentId: agent.id,
-        propertyId,
+        id: propertyId,
+        assignedToId: null,
       });
     }
   };
 
   const assignedPropertyIds =
-    agentDetails?.agentPermissions.map((p) => p.property.id) || [];
+    agentDetails?.assignedProperties?.map((p) => p.id) || [];
   const availableProperties = properties?.filter(
     (p) => !assignedPropertyIds.includes(p.id)
   );

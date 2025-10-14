@@ -15,13 +15,12 @@ interface AgentCardProps {
     image: string | null;
     first_name: string | null;
     last_name: string | null;
-    agentPermissions: Array<{
-      property: {
-        id: string;
-        name: string;
-        location: string;
-      };
-    }>;
+    assignedProperties?: {
+      id: string;
+      name: string;
+      location: string;
+    }[];
+    assignedAreas?: any[];
   };
   onDelete: (id: string) => void;
 }
@@ -59,28 +58,28 @@ const AgentCard: FC<AgentCardProps> = ({ agent, onDelete }) => {
             <span className="text-gray-600">Assigned Properties:</span>
             <span className="font-semibold flex items-center gap-1">
               <Home className="h-4 w-4" />
-              {agent.agentPermissions.length}
+              {agent.assignedProperties?.length || 0}
             </span>
           </div>
 
-          {agent.agentPermissions.length > 0 && (
+          {agent.assignedProperties && agent.assignedProperties.length > 0 && (
             <div className="mt-3 pt-3 border-t">
               <p className="text-xs text-gray-500 mb-2">Recent Properties:</p>
               <div className="space-y-1">
-                {agent.agentPermissions.slice(0, 2).map((perm) => (
+                {agent.assignedProperties.slice(0, 2).map((property) => (
                   <div
-                    key={perm.property.id}
+                    key={property.id}
                     className="text-xs bg-gray-50 p-2 rounded"
                   >
-                    <p className="font-medium truncate">{perm.property.name}</p>
+                    <p className="font-medium truncate">{property.name}</p>
                     <p className="text-gray-500 truncate">
-                      {perm.property.location}
+                      {property.location}
                     </p>
                   </div>
                 ))}
-                {agent.agentPermissions.length > 2 && (
+                {agent.assignedProperties.length > 2 && (
                   <p className="text-xs text-gray-500 text-center py-1">
-                    +{agent.agentPermissions.length - 2} more
+                    +{agent.assignedProperties.length - 2} more
                   </p>
                 )}
               </div>

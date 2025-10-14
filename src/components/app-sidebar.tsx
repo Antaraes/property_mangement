@@ -10,6 +10,11 @@ import {
   MapPin,
   Briefcase,
   LayoutDashboard,
+  MessageSquare,
+  ClipboardList,
+  DollarSign,
+  Building2,
+  Globe,
 } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -54,67 +59,128 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/dashboard/properties",
           },
           {
-            title: "For Sale",
-            url: "/dashboard/properties/sale",
-          },
-          {
-            title: "For Rent",
-            url: "/dashboard/properties/rent",
+            title: "Create Property",
+            url: "/dashboard/properties/create",
           },
         ],
       },
     ];
 
-    // Add Agents section for ADMIN and SUPERADMIN only
+    // Add Employees section for ADMIN and SUPERADMIN only
     if (canViewAgentTab) {
       items.push({
-        title: "Agents",
+        title: "Employees",
         url: "#",
         icon: Users,
         items: [
           {
-            title: "All Agents",
-            url: "/dashboard/agents",
+            title: "All Employees",
+            url: "/dashboard/employees",
+          },
+          {
+            title: "Create Employee",
+            url: "/dashboard/employees/create",
           },
         ],
       });
     }
 
-    // Add Documents for AGENT, ADMIN, SUPERADMIN
+    // Add CRM / Leads for EMPLOYEE, ADMIN, SUPERADMIN
     if (canViewDocuments) {
       items.push({
-        title: "Documents",
+        title: "CRM & Leads",
         url: "#",
-        icon: FileText,
+        icon: ClipboardList,
         items: [
           {
-            title: "Contracts",
-            url: "/dashboard/documents/contracts",
+            title: "All Leads",
+            url: "/dashboard/leads",
           },
           {
-            title: "Agreements",
-            url: "/dashboard/documents/agreements",
+            title: "My Leads",
+            url: "/dashboard/leads/my-leads",
+          },
+          {
+            title: "Lead Analytics",
+            url: "/dashboard/leads/analytics",
           },
         ],
       });
     }
 
-    // Add Locations for all users
+    // Add Transactions for EMPLOYEE, ADMIN, SUPERADMIN
+    if (canViewDocuments) {
+      items.push({
+        title: "Transactions",
+        url: "#",
+        icon: DollarSign,
+        items: [
+          {
+            title: "All Transactions",
+            url: "/dashboard/transactions",
+          },
+          {
+            title: "Create Transaction",
+            url: "/dashboard/transactions/create",
+          },
+        ],
+      });
+    }
+
+    // Add Messages for all authenticated users
     items.push({
-      title: "Locations",
+      title: "Messages",
       url: "#",
-      icon: MapPin,
+      icon: MessageSquare,
       items: [
         {
-          title: "City Listings",
-          url: "/dashboard/locations/cities",
+          title: "Inbox",
+          url: "/dashboard/messages",
         },
         {
-          title: "Neighborhoods",
-          url: "/dashboard/locations/neighborhoods",
+          title: "Sent",
+          url: "/dashboard/messages/sent",
         },
       ],
     });
+
+    // Add Locations/Areas for ADMIN and SUPERADMIN
+    if (canViewAgentTab) {
+      items.push({
+        title: "Locations",
+        url: "#",
+        icon: MapPin,
+        items: [
+          {
+            title: "Countries",
+            url: "/dashboard/countries",
+          },
+          {
+            title: "Areas",
+            url: "/dashboard/areas",
+          },
+        ],
+      });
+    }
+
+    // Add Company for ADMIN and SUPERADMIN
+    if (canManageSettings) {
+      items.push({
+        title: "Company",
+        url: "#",
+        icon: Building2,
+        items: [
+          {
+            title: "Company Profile",
+            url: "/dashboard/company",
+          },
+          {
+            title: "Statistics",
+            url: "/dashboard/company/stats",
+          },
+        ],
+      });
+    }
 
     // Add Settings with role-based sub-items
     const settingsItems = [
@@ -126,8 +192,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     if (canManageSettings) {
       settingsItems.push({
-        title: "Billing",
-        url: "/dashboard/settings/billing",
+        title: "System Settings",
+        url: "/dashboard/settings/system",
       });
     }
 

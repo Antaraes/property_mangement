@@ -17,13 +17,13 @@ const AgentsDashboard: FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const { canCreateAgents } = useRBAC();
 
-  // Fetch all agents
-  const { data: agents, isLoading } = trpc.agent.list.useQuery();
+  // Fetch all agents (using legacy agent router for now, will migrate to employee router)
+  const { data: agents, isLoading } = trpc.employee.list.useQuery();
 
   // Delete mutation
-  const deleteMutation = trpc.agent.delete.useMutation({
+  const deleteMutation = trpc.employee.delete.useMutation({
     onSuccess: () => {
-      utils.agent.list.invalidate();
+      utils.employee.list.invalidate();
       toast.success("Agent deleted successfully!");
     },
     onError: (error) => {
@@ -108,21 +108,15 @@ const AgentsDashboard: FC = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-sm text-gray-600">Total Agents</p>
+          <p className="text-sm text-gray-600">Total Employees</p>
           <p className="text-2xl font-bold">{agents?.length || 0}</p>
         </div>
         <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-sm text-gray-600">Active Agents</p>
+          <p className="text-sm text-gray-600">Active Employees</p>
           <p className="text-2xl font-bold">
-            {agents?.filter((a) => a.agentPermissions.length > 0).length || 0}
-          </p>
-        </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <p className="text-sm text-gray-600">Total Permissions</p>
-          <p className="text-2xl font-bold">
-            {agents?.reduce((sum, a) => sum + a.agentPermissions.length, 0) || 0}
+            {agents?.length || 0}
           </p>
         </div>
       </div>
@@ -165,7 +159,7 @@ const AgentsDashboard: FC = () => {
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
-            utils.agent.list.invalidate();
+            utils.employee.list.invalidate();
           }}
         />
       )}
